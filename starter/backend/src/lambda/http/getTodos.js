@@ -94,13 +94,13 @@ import { getTodosForUser } from '../../businessLogic/todo.js'
 
 export async function handler(event) {
   console.log('Event: ', event)
-
+  const abcc = await getTodosForUser()
   return {
     statusCode: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(getTodosForUser())
+    body: JSON.stringify(abcc)
   }
 }

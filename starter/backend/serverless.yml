@@ -13,7 +13,8 @@ provider:
   tracing:
     lambda: true
     apiGateway: true
-  profile: serverless
+  # profile: serverless
+  profile: default
   environment:
     TODOS_TABLE: Uda-Todos-${self:provider.stage}
     TODOS_CREATED_AT_INDEX: CreatedAtIndex

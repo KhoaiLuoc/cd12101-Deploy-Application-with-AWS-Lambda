@@ -15,13 +15,13 @@ const todosTable = process.env.TODOS_TABLE
 const todosIndex = process.env.TODOS_CREATED_AT_INDEX
 
 export async function getAll(userId) {
-  logger.info('Call function getall ', Date.now())
+  logger.info('Call function getall ' + Date.now())
   const result = await dynamoDbClient.scan({
     TableName: todosTable
   })
 
   const items = result.Items
-  console.log('ITEM ', items)
+  logger.info('ITEM ' + items)
   return items
 }
 
