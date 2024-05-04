@@ -1,18 +1,24 @@
-// import * as AWS from "aws-sdk";
-// const AWSXRay = require("aws-xray-sdk");
-// import { DocumentClient } from "aws-sdk/clients/dynamodb";
 import { createLogger } from '../utils/logger.mjs'
-// import { TodoItem } from "../models/TodoItem";
-// import { TodoUpdate } from "../models/TodoUpdate";
 import { DynamoDB } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb'
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import AWSXRay from 'aws-xray-sdk-core'
 
-const dynamoDbClient = DynamoDBDocument.from(new DynamoDB())
+const dynamoDbClient = DynamoDBDocument.from(
+  AWSXRay.captureAWSv3Client(new DynamoDB())
+)
 
 const logger = createLogger('todosAccess')
 
 const todosTable = process.env.TODOS_TABLE
 const todosIndex = process.env.TODOS_CREATED_AT_INDEX
+const url_expiration = parseInt(process.env.SIGNED_URL_EXPIRATION)
+const s3_bucket_name = process.env.ATTACHMENT_S3_BUCKET
 
 export async function getAll(userId) {
   logger.info(`${userId} call function getall`)
@@ -39,100 +45,82 @@ export async function create(item) {
   return item
 }
 
-//   async update(
-//     userId: string,
-//     todoId: string,
-//     todoUpdate: TodoUpdate
-//   ): Promise<TodoItem> {
-//     logger.info(`Updating todo item ${todoId} in ${this.todosTable}`);
-//     try {
-//       await this.docClient
-//         .update({
-//           TableName: this.todosTable,
-//           Key: {
-//             userId,
-//             todoId,
-//           },
-//           UpdateExpression:
-//             "set #name = :name, #dueDate = :dueDate, #done = :done",
-//           ExpressionAttributeNames: {
-//             "#name": "name",
-//             "#dueDate": "dueDate",
-//             "#done": "done",
-//           },
-//           ExpressionAttributeValues: {
-//             ":name": todoUpdate.name,
-//             ":dueDate": todoUpdate.dueDate,
-//             ":done": todoUpdate.done,
-//           },
-//           ReturnValues: "UPDATED_NEW",
-//         })
-//         .promise();
-//     } catch (error) {
-//       logger.error("Error =======> updating Todo.", {
-//         error: error,
-//         data: {
-//           todoId,
-//           userId,
-//           todoUpdate,
-//         },
-//       });
-//       throw Error(error);
-//     }
-//     return todoUpdate as TodoItem;
-//   }
-//   async delete(userId: string, todoId: string): Promise<String> {
-//     logger.info(`Deleting todo item ${todoId} from ${this.todosTable}`);
-//     try {
-//       await this.docClient
-//         .delete({
-//           TableName: this.todosTable,
-//           Key: {
-//             userId,
-//             todoId,
-//           },
-//         })
-//         .promise();
-//       return "success";
-//     } catch (e) {
-//       logger.info("Error ==>>", {
-//         error: e,
-//       });
-//       return "Error";
-//     }
-//   }
-//   async getUploadUrl(todoId: string, userId: string): Promise<string> {
-//     const uploadUrl = this.S3.getSignedUrl("putObject", {
-//       Bucket: this.bucket_name,
-//       Key: todoId,
-//       Expires: Number(url_expiration),
-//     });
-//     await this.docClient
-//       .update({
-//         TableName: this.todosTable,
-//         Key: {
-//           userId,
-//           todoId,
-//         },
-//         UpdateExpression: "set attachmentUrl = :URL",
-//         ExpressionAttributeValues: {
-//           ":URL": uploadUrl.split("?")[0],
-//         },
-//         ReturnValues: "UPDATED_NEW",
-//       })
-//       .promise();
-//     return uploadUrl;
-//   }
-// }
+export async function updateToDo(userId, todoId, todoUpdate) {
+  logger.info(`Updating todo item ${todoId} in ${todosTable}`)
+  try {
+    await dynamoDbClient.update({
+      TableName: todosTable,
+      Key: {
+        userId,
+        todoId
+      },
+      UpdateExpression: 'set #name = :name, #dueDate = :dueDate, #done = :done',
+      ExpressionAttributeNames: {
+        '#name': 'name',
+        '#dueDate': 'dueDate',
+        '#done': 'done'
+      },
+      ExpressionAttributeValues: {
+        ':name': todoUpdate.name,
+        ':dueDate': todoUpdate.dueDate,
+        ':done': todoUpdate.done
+      },
+      ReturnValues: 'UPDATED_NEW'
+    })
+  } catch (error) {
+    logger.error('Error =======> updating Todo.', {
+      error: error,
+      data: {
+        todoId,
+        userId,
+        todoUpdate
+      }
+    })
+    throw Error(error)
+  }
+  return todoUpdate
+}
 
-// function createDynamoDBClient() {
-//   if (process.env.IS_OFFLINE) {
-//     console.log("Creating a local DynamoDB instance");
-//     return new XAWS.DynamoDB.DocumentClient({
-//       region: "localhost",
-//       endpoint: "http://localhost:8000",
-//     });
-//   }
+export async function deleteTodo(userId, todoId) {
+  logger.info(`Deleting todo item ${todoId}`)
+  try {
+    await dynamoDbClient.delete({
+      TableName: todosTable,
+      Key: {
+        userId,
+        todoId
+      }
+    })
+    return 'success'
+  } catch (e) {
+    logger.info('Error ==>>', {
+      error: e
+    })
+    return 'Error'
+  }
+}
 
-//   return new XAWS.DynamoDB.DocumentClient();
-// }
+export async function getUploadUrl(userId, todoId) {
+  const s3Client2 = new S3Client()
+  const command = new PutObjectCommand({
+    Bucket: s3_bucket_name,
+    Key: todoId
+  })
+  const uploadUrl = await getSignedUrl(s3Client2, command, {
+    expiresIn: url_expiration
+  })
+
+  await dynamoDbClient.update({
+    TableName: todosTable,
+    Key: {
+      userId,
+      todoId
+    },
+    UpdateExpression: 'set attachmentUrl = :URL',
+    ExpressionAttributeValues: {
+      ':URL': uploadUrl.split('?')[0]
+    },
+    ReturnValues: 'UPDATED_NEW'
+  })
+  return uploadUrl
+}
