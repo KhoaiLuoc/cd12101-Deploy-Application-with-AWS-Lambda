@@ -1,38 +1,41 @@
-import { getAll } from '../dataLayer/todosAccess.js'
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import * as uuid from 'uuid'
+import { getAll, create } from '../dataLayer/todosAccess.js'
 // import { AttachmentUtils } from './attachmentUtils'
 // import { TodoItem } from '../models/TodoItem'
 // import { CreateTodoRequest } from '../requests/CreateTodoRequest'
 // import { UpdateTodoRequest } from '../requests/UpdateTodoRequest'
 import { createLogger } from '../utils/logger.mjs'
-import * as uuid from 'uuid'
-// import * as createError from "http-errors";
+
+const url_expiration = parseInt(process.env.SIGNED_URL_EXPIRATION)
+const s3_bucket_name = process.env.ATTACHMENT_S3_BUCKET
 
 const logger = createLogger('todo')
-// const attatchmentUtils = new AttachmentUtils()
-// const todosAccess = new TodosAccess() remove
 
-// export async function CreateTodo(
-//   newItem: CreateTodoRequest,
-//   userId: string
-// ): Promise<TodoItem> {
-//   logger.info('Call function create todos')
-//   const todoId = uuid.v4()
-//   const createdAt = new Date().toISOString()
-//   const s3AttachUrl = attatchmentUtils.getAttachmentUrl(userId)
-//   const _newItem = {
-//     userId,
-//     todoId,
-//     createdAt,
-//     done: false,
-//     attachmentUrl: s3AttachUrl,
-//     ...newItem
-//   }
-//   return await todosAccess.create(_newItem)
-// }
+export async function createTodo(newItem, userId) {
+  logger.info('Call function create todos')
+  const todoId = uuid.v4()
+  const createdAt = new Date().toISOString()
+  const s3AttachUrl = `https://${s3_bucket_name}.s3.amazoneaws.com/"${todoId}`
+  const saveItem = {
+    userId,
+    todoId,
+    createdAt,
+    done: false,
+    attachmentUrl: s3AttachUrl,
+    ...newItem
+  }
+  return create(saveItem)
+}
 
 export async function getTodosForUser(userId) {
-  logger.info('Call function getall todos')
-  return await getAll(userId)
+  logger.info(`${userId} call getTodosForUser `)
+  return getAll(userId)
 }
 
 // export async function UpdateTodo(
@@ -60,3 +63,16 @@ export async function getTodosForUser(userId) {
 //   const uploadUrl = todosAccess.getUploadUrl(todoId, userId)
 //   return uploadUrl
 // }
+
+export async function getUploadUrl(todoId) {
+  const s3Client2 = new S3Client()
+  const command = new PutObjectCommand({
+    Bucket: s3_bucket_name,
+    Key: todoId
+  })
+  const url = await getSignedUrl(s3Client2, command, {
+    expiresIn: url_expiration
+  })
+
+  return url
+}

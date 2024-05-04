@@ -1,20 +1,9 @@
-const items = [
-  {
-    todoId: '605525c4-d36c-1234-b3ff-65b853344123',
-    userId: 'google-oauth2|115783759495544745774',
-    attachmentUrl:
-      'https://serverless-c4-todo-images.s3.amazonaws.com/605525c4-1234-4d23-b3ff-65b853344123',
-    dueDate: '2022-12-12',
-    createdAt: '2022-11-28T22:04:08.613Z',
-    name: 'Buy bread',
-    done: false
-  }
-]
 import middy from '@middy/core'
 import cors from '@middy/http-cors'
 import httpErrorHandler from '@middy/http-error-handler'
 import createError from 'http-errors'
 import { getTodosForUser } from '../../businessLogic/todo.js'
+import { getUserId } from '../utils.mjs'
 
 // export function handler(event, context, callback) {
 //   // TODO: Get all TODO items for a current user
@@ -65,25 +54,30 @@ import { getTodosForUser } from '../../businessLogic/todo.js'
 //   }
 // }
 
-// export const handler = middy()
-//   .use(httpErrorHandler())
-//   .use(
-//     cors({
-//       credentials: true
-//     })
-//   )
-//   .handler(async (event) => {
-//     // Write your logic here
-//     throw new createError.UnprocessableEntity()
-//     return {
-//       statusCode: 200,
-//       // headers: {
-//       //   'Access-Control-Allow-Origin': '*',
-//       //   'Content-Type': 'application/json'
-//       // },
-//       body: JSON.stringify({ message: 'Hello World!3333333333333333333' })
-//     }
-//   })
+export const handler = middy()
+  .use(httpErrorHandler())
+  .use(
+    cors({
+      credentials: true
+    })
+  )
+  .handler(async (event) => {
+    try {
+      const userId = getUserId(event)
+      const todos = await getTodosForUser(userId)
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ items: todos })
+      }
+    } catch (error) {
+      throw createError(
+        500,
+        JSON.stringify({
+          error: error
+        })
+      )
+    }
+  })
 
 // handler({}, {}, (_, response) => {
 //   t.deepEqual(response, {
@@ -92,15 +86,15 @@ import { getTodosForUser } from '../../businessLogic/todo.js'
 //   })
 // })
 
-export async function handler(event) {
-  console.log('Event: ', event)
-  const abcc = await getTodosForUser()
-  return {
-    statusCode: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(abcc)
-  }
-}
+// export async function handler(event) {
+//   console.log('Event: ', event)
+//   const abcc = await getTodosForUser()
+//   return {
+//     statusCode: 200,
+//     headers: {
+//       'Access-Control-Allow-Origin': '*',
+//       'Content-Type': 'application/json'
+//     },
+//     body: JSON.stringify(abcc)
+//   }
+// }

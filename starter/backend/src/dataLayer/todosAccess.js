@@ -15,26 +15,29 @@ const todosTable = process.env.TODOS_TABLE
 const todosIndex = process.env.TODOS_CREATED_AT_INDEX
 
 export async function getAll(userId) {
-  logger.info('Call function getall ' + Date.now())
-  const result = await dynamoDbClient.scan({
-    TableName: todosTable
+  logger.info(`${userId} call function getall`)
+  const result = await dynamoDbClient.query({
+    TableName: todosTable,
+    IndexName: todosIndex,
+    KeyConditionExpression: 'userId = :userId',
+    ExpressionAttributeValues: {
+      ':userId': userId
+    }
   })
 
+  logger.info(`${userId} call successfully `)
   const items = result.Items
-  logger.info('ITEM ' + items)
   return items
 }
 
-//   async create(item: TodoItem): Promise<TodoItem> {
-//     logger.info("Call function create");
-//     await this.docClient
-//       .put({
-//         TableName: this.todosTable,
-//         Item: item,
-//       })
-//       .promise();
-//     return item as TodoItem;
-//   }
+export async function create(item) {
+  logger.info('call function create')
+  await dynamoDbClient.put({
+    TableName: todosTable,
+    Item: item
+  })
+  return item
+}
 
 //   async update(
 //     userId: string,
